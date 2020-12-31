@@ -1,10 +1,14 @@
+from django.core.validators import MaxValueValidator
 from django.db import models
 
 
+game_size_validator = MaxValueValidator(1000)
+
+
 class Game(models.Model):
-    width = models.IntegerField()
-    height = models.IntegerField()
-    winThreshold = models.IntegerField()
+    width = models.PositiveIntegerField(validators=[game_size_validator])
+    height = models.PositiveIntegerField(validators=[game_size_validator])
+    winThreshold = models.PositiveIntegerField(validators=[game_size_validator])
     # list[int:user_id]
     players = models.JSONField()
     # list[str:hex_code]
