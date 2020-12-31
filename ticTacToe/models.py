@@ -10,9 +10,9 @@ class Game(models.Model):
     height = models.PositiveIntegerField(validators=[game_size_validator])
     winThreshold = models.PositiveIntegerField(validators=[game_size_validator])
     # list[int:user_id]
-    players = models.JSONField()
+    players = models.JSONField(default=list)
     # list[str:hex_code]
-    colors = models.JSONField()
+    colors = models.JSONField(default=list)
     # list[tuple[int:i, int:j, int:user_index]]
     history = models.JSONField(default=list, blank=True)
     creationTime = models.DateTimeField(auto_now=True)
