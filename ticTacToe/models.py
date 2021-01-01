@@ -5,12 +5,17 @@ from django.db import models
 game_size_validator = MaxValueValidator(1000)
 
 
+def get_admin():
+    return User.objects.get(username='admin').id
+
+
 class Game(models.Model):
     width = models.PositiveIntegerField(validators=[game_size_validator])
     height = models.PositiveIntegerField(validators=[game_size_validator])
     win_threshold = models.PositiveIntegerField(
         validators=[game_size_validator]
     )
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, default=get_admin)
     players = models.ManyToManyField(User, related_name='tic_tac_toe_games')
     # object[int:id -> str:hex_code]
     colors = models.JSONField()

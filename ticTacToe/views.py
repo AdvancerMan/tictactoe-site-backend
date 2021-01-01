@@ -89,6 +89,7 @@ class CreateGameView(APIView):
             request.user.id: data['owner_color']
         }
         del data['owner_color']
+        data['owner'] = request.user
 
         game = Game.objects.create(**data)
         game.players.add(request.user)

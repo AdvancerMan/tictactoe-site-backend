@@ -7,7 +7,7 @@ class GameListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
         fields = ('width', 'height', 'win_threshold',
-                  'players', 'creation_time')
+                  'owner', 'creation_time')
 
 
 class GameSerializer(serializers.ModelSerializer):
