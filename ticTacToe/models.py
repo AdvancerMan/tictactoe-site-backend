@@ -28,7 +28,7 @@ class Game(models.Model):
     # if null so history should be used
     # (field can be initialized from history at any time)
     # list[list[int:player_index or -1]]
-    field = models.JSONField(default=None, null=True)
+    field = models.JSONField(default=None, null=True, blank=True)
     creation_time = models.DateTimeField(auto_now_add=True)
     started = models.BooleanField(default=False)
     winner_index = models.BooleanField(default=None, null=True)
