@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator
 from django.db import models
 
-game_size_validator = MaxValueValidator(1000)
+game_size_validator = MaxValueValidator(100)
 
 
 def get_admin():

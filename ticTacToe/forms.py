@@ -13,7 +13,16 @@ class PageCountForm(forms.Form):
 
 
 class GameForm(forms.Form):
-    width = forms.IntegerField(min_value=1, max_value=1000)
-    height = forms.IntegerField(min_value=1, max_value=1000)
-    win_threshold = forms.IntegerField(min_value=1, max_value=1000)
+    width = forms.IntegerField(min_value=1, max_value=100)
+    height = forms.IntegerField(min_value=1, max_value=100)
+    win_threshold = forms.IntegerField(min_value=1, max_value=100)
     owner_color = forms.RegexField(r'^#[0-9a-fA-F]{6}$')
+
+
+class JoinForm(forms.Form):
+    color = forms.RegexField(r'^#[0-9a-fA-F]{6}$')
+
+
+class TurnForm(forms.Form):
+    i = forms.IntegerField(min_value=0, max_value=99)
+    j = forms.IntegerField(min_value=0, max_value=99)

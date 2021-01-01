@@ -6,7 +6,7 @@ from .models import Game
 class GameListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
-        fields = ('width', 'height', 'win_threshold',
+        fields = ('id', 'width', 'height', 'win_threshold',
                   'owner', 'creation_time')
 
 
