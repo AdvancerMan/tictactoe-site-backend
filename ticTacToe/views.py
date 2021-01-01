@@ -167,6 +167,9 @@ class MakeTurnView(APIView):
                 for distance in range(1, game.win_threshold):
                     check_i = i + step_i * distance
                     check_j = j + step_j * distance
+                    if (check_i < 0 or check_i >= game.height
+                            or check_j < 0 or check_j >= game.width):
+                        break
                     if game.field[check_i][check_j] == game.field[i][j]:
                         captured[step_i + 1][step_j + 1] = distance
                     else:
@@ -215,9 +218,9 @@ class MakeTurnView(APIView):
             self.init_field(game)
 
         if game.field is not None:
-            self.check_win_field(i, j, game)
+            return self.check_win_field(i, j, game)
         else:
-            self.check_win_history(i, j, game)
+            return self.check_win_history(i, j, game)
 
     def patch(self, request, pk):
         game = Game.objects.filter(id=pk).first()
