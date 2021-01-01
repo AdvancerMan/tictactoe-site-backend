@@ -158,10 +158,76 @@ class StartGameView(APIView):
 
 
 class MakeTurnView(APIView):
+    def check_win_field(self, i, j, game):
+        captured = [[0] * 3 for _ in range(3)]
+        for step_i in range(-1, 2):
+            for step_j in range(-1, 2):
+                if step_i == 0 and step_j == 0:
+                    continue
+                for distance in range(1, game.win_threshold):
+                    check_i = i + step_i * distance
+                    check_j = j + step_j * distance
+                    if game.field[check_i][check_j] == game.field[i][j]:
+                        captured[step_i + 1][step_j + 1] = distance
+                    else:
+                        break
+                if (captured[step_i + 1][step_j + 1]
+                        + captured[-step_i + 1][-step_j + 1] + 1
+                        >= game.win_threshold):
+                    return True
+        return False
+
+    def check_win_history(self, i, j, game):
+        history_sorted = sorted(
+            game.history[game.history[-1]::len(game.order)],
+            key=lambda p: abs(p[0] - i) + abs(p[1] - j)
+        )
+        captured = [[0] * 3 for _ in range(3)]
+
+        for turn in history_sorted:
+            delta_i = turn[0] - i
+            delta_j = turn[1] - j
+            max_abs = max(abs(delta_i), abs(delta_j))
+            if (abs(delta_i) == abs(delta_j) or 0 in (delta_j, delta_i)) \
+                    and max_abs != 0:
+                step_i = delta_i / max_abs
+                step_j = delta_j / max_abs
+                if captured[step_i + 1][step_j + 1] + 1 == max_abs:
+                    captured[step_i + 1][step_j + 1] = max_abs
+
+        for delta_i in range(-1, 2):
+            for delta_j in range(-1, 2):
+                if (captured[delta_i + 1][delta_j + 1]
+                        + captured[-delta_i + 1][-delta_j + 1] + 1
+                        >= game.win_threshold):
+                    return True
+        return False
+
+    def init_field(self, game):
+        game.field = [[-1] * game.width for _ in range(game.height)]
+        for i in range(len(game.history)):
+            turn = game.history[i]
+            game.field[turn[0]][turn[1]] = i % len(game.order)
+
+    def check_win(self, i, j, game):
+        if game.field is None \
+                and len(game.history) > 2 * min(game.width, game.height):
+            self.init_field(game)
+
+        if game.field is not None:
+            self.check_win_field(i, j, game)
+        else:
+            self.check_win_history(i, j, game)
+
     def patch(self, request, pk):
         game = Game.objects.filter(id=pk).first()
+        # TODO move all validation to form
         if not game:
             return Response({'errors': {'pk': 'Game pk is invalid'}},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if game.winner_index is not None:
+            return Response({'errors': {'game': 'Game has already finished'}},
                             status=status.HTTP_400_BAD_REQUEST)
 
         form = TurnForm(request.data)
@@ -169,7 +235,8 @@ class MakeTurnView(APIView):
             return Response({'errors': form.errors},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        turn_user_id = game.order[len(game.history) % game.players.count()]
+        turn_user_index = len(game.history) % game.players.count()
+        turn_user_id = game.order[turn_user_index]
         if turn_user_id != request.user.id:
             return Response({'errors': {'user': 'It is not your turn'}},
                             status=status.HTTP_403_FORBIDDEN)
@@ -186,13 +253,22 @@ class MakeTurnView(APIView):
                 'j': f'Not in range (0, {game.width})'
             }}, status=status.HTTP_400_BAD_REQUEST)
 
-        if [i, j] in game.history:
+        if (game.field is not None and game.field[i][j] != -1
+                or game.field is None and [i, j] in game.history):
             return Response({'errors': {
                 ind: f'Cell ({i}, {j}) is already busy'
                 for ind in ('i', 'j')
             }}, status=status.HTTP_400_BAD_REQUEST)
 
-        # TODO validate field and finish the game if it is needed
-        game.history.append((i, j))
+        game.history.append([i, j])
+        if game.field:
+            game.field[i][j] = turn_user_index
+        if self.check_win(i, j, game):
+            game.winner_index = turn_user_index
+            game.field = None
+        elif len(game.history) == game.width * game.height:
+            game.winner_index = -1
+            game.field = None
+
         game.save()
-        return Response()
+        return Response({'winner_index': game.winner_index})

@@ -23,8 +23,15 @@ class Game(models.Model):
     order = models.JSONField(default=list, blank=True)
     # list[tuple[int:i, int:j]]
     history = models.JSONField(default=list, blank=True)
+
+    # field and history must not have conflicts
+    # if null so history should be used
+    # (field can be initialized from history at any time)
+    # list[list[int:player_index or -1]]
+    field = models.JSONField(default=None, null=True)
     creation_time = models.DateTimeField(auto_now_add=True)
     started = models.BooleanField(default=False)
+    winner_index = models.BooleanField(default=None, null=True)
 
     def __str__(self):
         return f"[{'started' if self.started else 'waiting'}] " \
