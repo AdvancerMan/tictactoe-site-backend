@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 
-from .forms import PageCountForm
+from .forms import PageCountForm, GameForm
 from .models import Game
 from .serializers import GameSerializer, GameListSerializer
 
@@ -46,6 +46,12 @@ class StartedGamesView(MyListView):
 class GameDetailView(APIView):
     permission_classes = []
 
+    def head(self, request, pk):
+        game = Game.objects.filter(id=pk)
+        if not game:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response()
+
     def get(self, request, pk):
         game = Game.objects.filter(id=pk)
         if not game:
@@ -63,3 +69,28 @@ class WaitingGamesView(MyListView):
 
     def get_serializer_class(self):
         return GameListSerializer
+
+
+class CreateGameView(APIView):
+    def post(self, request):
+        if request.user.tic_tac_toe_games.filter(started=False):
+            return Response({'errors': {
+                'user': 'You can not create more than 1 game at the same time'
+            }}, status=status.HTTP_400_BAD_REQUEST)
+
+        form = GameForm(request.data)
+        if not form.is_valid():
+            return Response({'errors': form.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # it is not a copy of form.cleaned_data
+        data = form.cleaned_data
+        data['colors'] = {
+            request.user.id: data['owner_color']
+        }
+        del data['owner_color']
+
+        game = Game.objects.create(**data)
+        game.players.add(request.user)
+        serializer = GameSerializer(game)
+        return Response(serializer.data)

@@ -10,3 +10,10 @@ class PageCountForm(forms.Form):
 
     def clean_count(self):
         return int(self.data.get('count', 10))
+
+
+class GameForm(forms.Form):
+    width = forms.IntegerField(min_value=1, max_value=1000)
+    height = forms.IntegerField(min_value=1, max_value=1000)
+    win_threshold = forms.IntegerField(min_value=1, max_value=1000)
+    owner_color = forms.RegexField(r'^#[0-9a-fA-F]{6}$')
