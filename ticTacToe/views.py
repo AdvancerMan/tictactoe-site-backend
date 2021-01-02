@@ -152,6 +152,7 @@ class StartGameView(APIView):
 
         game.order = list([player.id for player in game.players.all()])
         shuffle(game.order)
+        game.colors = [game.colors[player_id] for player_id in game.order]
         game.started = True
         game.save()
 

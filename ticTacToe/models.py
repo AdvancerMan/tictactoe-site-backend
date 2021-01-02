@@ -17,7 +17,10 @@ class Game(models.Model):
     )
     owner = models.ForeignKey(User, on_delete=models.CASCADE, default=get_admin)
     players = models.ManyToManyField(User, related_name='tic_tac_toe_games')
-    # object[int:id -> str:hex_code]
+    # if not started:
+    #     object[int:id -> str:hex_code]
+    # else:
+    #     list[str:hex_code] (according to order)
     colors = models.JSONField()
     # list[int:id]
     order = models.JSONField(default=list, blank=True)
