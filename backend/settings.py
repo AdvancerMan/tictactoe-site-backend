@@ -101,12 +101,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-AUTH_THROUGH_JWT = False
-
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication'
-        if AUTH_THROUGH_JWT else
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
