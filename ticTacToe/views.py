@@ -5,7 +5,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 
-from .forms import PageCountForm, GameForm, JoinForm, TurnForm
+from .forms import PageCountForm, GameForm, JoinForm, TurnForm, \
+    HistorySuffixForm
 from .models import Game
 from .serializers import GameSerializer, GameListSerializer
 
@@ -275,3 +276,20 @@ class MakeTurnView(APIView):
 
         game.save()
         return Response({'winner_index': game.winner_index})
+
+
+class HistorySuffixView(APIView):
+    def get(self, request, pk):
+        game = Game.objects.filter(id=pk).first()
+        # TODO move all validation to form
+        if not game:
+            return Response({'errors': {'pk': 'Game pk is invalid'}},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        form = HistorySuffixForm(request.GET)
+        if not form.is_valid():
+            return Response({'errors': form.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        start_index = form.cleaned_data['start_index']
+        return Response({'history': game.history[start_index:]})

@@ -26,3 +26,7 @@ class JoinForm(forms.Form):
 class TurnForm(forms.Form):
     i = forms.IntegerField(min_value=0, max_value=99)
     j = forms.IntegerField(min_value=0, max_value=99)
+
+
+class HistorySuffixForm(forms.Form):
+    start_index = forms.IntegerField(min_value=0, max_value=9999)
