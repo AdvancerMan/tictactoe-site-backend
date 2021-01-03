@@ -8,7 +8,7 @@ from rest_framework import status
 from .forms import PageCountForm, GameForm, JoinForm, TurnForm, \
     HistorySuffixForm
 from .models import Game
-from .serializers import GameSerializer, GameListSerializer
+from .serializers import GameSerializer, GameListSerializer, WinDataSerializer
 
 
 class MyListView(APIView, ABC):
@@ -160,6 +160,21 @@ class StartGameView(APIView):
 
 
 class MakeTurnView(APIView):
+    def check_captured(self, i, j, game, captured):
+        for step_i in range(-1, 2):
+            for step_j in range(-1, 2):
+                if (captured[step_i + 1][step_j + 1]
+                        + captured[-step_i + 1][-step_j + 1] + 1
+                        >= game.win_threshold):
+                    start_i = i + step_i * captured[step_i + 1][step_j + 1]
+                    start_j = j + step_j * captured[step_i + 1][step_j + 1]
+                    return {
+                        'start_i': start_i,
+                        'start_j': start_j,
+                        'direction_i': -step_i,
+                        'direction_j': -step_j,
+                    }
+
     def check_win_field(self, i, j, game):
         captured = [[0] * 3 for _ in range(3)]
         for step_i in range(-1, 2):
@@ -176,11 +191,8 @@ class MakeTurnView(APIView):
                         captured[step_i + 1][step_j + 1] = distance
                     else:
                         break
-                if (captured[step_i + 1][step_j + 1]
-                        + captured[-step_i + 1][-step_j + 1] + 1
-                        >= game.win_threshold):
-                    return True
-        return False
+
+        return self.check_captured(i, j, game, captured)
 
     def check_win_history(self, i, j, game):
         history_sorted = sorted(
@@ -201,13 +213,7 @@ class MakeTurnView(APIView):
                 if captured[step_i + 1][step_j + 1] + 1 == max_abs:
                     captured[step_i + 1][step_j + 1] = max_abs
 
-        for delta_i in range(-1, 2):
-            for delta_j in range(-1, 2):
-                if (captured[delta_i + 1][delta_j + 1]
-                        + captured[-delta_i + 1][-delta_j + 1] + 1
-                        >= game.win_threshold):
-                    return True
-        return False
+        return self.check_captured(i, j, game, captured)
 
     def init_field(self, game):
         game.field = [[-1] * game.width for _ in range(game.height)]
@@ -232,7 +238,7 @@ class MakeTurnView(APIView):
             return Response({'errors': {'pk': 'Game pk is invalid'}},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        if game.winner_index is not None:
+        if game.finished:
             return Response({'errors': {'game': 'Game has already finished'}},
                             status=status.HTTP_400_BAD_REQUEST)
 
@@ -269,15 +275,19 @@ class MakeTurnView(APIView):
         game.history.append([i, j])
         if game.field:
             game.field[i][j] = turn_user_index
-        if self.check_win(i, j, game):
-            game.winner_index = turn_user_index
+        if win_data := self.check_win(i, j, game):
+            game.win_line_start_i = win_data['start_i']
+            game.win_line_start_j = win_data['start_j']
+            game.win_line_direction_i = win_data['direction_i']
+            game.win_line_direction_j = win_data['direction_j']
             game.field = None
         elif len(game.history) == game.width * game.height:
-            game.winner_index = -1
+            game.win_line_start_i = -1
+            game.win_line_start_j = -1
             game.field = None
 
         game.save()
-        return Response({'winner_index': game.winner_index})
+        return Response(WinDataSerializer(game).data)
 
 
 class HistorySuffixView(APIView):

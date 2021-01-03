@@ -34,9 +34,21 @@ class Game(models.Model):
     field = models.JSONField(default=None, null=True, blank=True)
     creation_time = models.DateTimeField(auto_now_add=True)
     started = models.BooleanField(default=False)
-    winner_index = models.BooleanField(default=None, null=True)
+
+    win_line_start_i = models.IntegerField(default=None, null=True, blank=True,
+                                           validators=[game_size_validator])
+    win_line_start_j = models.IntegerField(default=None, null=True, blank=True,
+                                           validators=[game_size_validator])
+    win_line_direction_i = models.IntegerField(default=None, null=True,
+                                               blank=True)
+    win_line_direction_j = models.IntegerField(default=None, null=True,
+                                               blank=True)
 
     def __str__(self):
         return f"[{'started' if self.started else 'waiting'}] " \
                f"{self.width}x{self.height}x{self.win_threshold} game with " \
                f"[{', '.join(str(u) for u in self.players.all())}]"
+
+    @property
+    def finished(self):
+        return self.win_line_start_i is not None

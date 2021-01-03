@@ -17,8 +17,26 @@ class PlayerSerializer(serializers.ModelSerializer):
         fields = ('id', 'username', 'first_name', 'last_name')
 
 
+class WinDataSerializer(serializers.ModelSerializer):
+    win_line_start = serializers.SerializerMethodField('get_win_line_start')
+    win_line_direction = serializers.SerializerMethodField(
+        'get_win_line_direction'
+    )
+
+    def get_win_line_start(self, game):
+        return game.win_line_start_i, game.win_line_start_j
+
+    def get_win_line_direction(self, game):
+        return game.win_line_direction_i, game.win_line_direction_j
+
+    class Meta:
+        model = Game
+        fields = ['win_line_start', 'win_line_direction']
+
+
 class GameSerializer(serializers.ModelSerializer):
     players = serializers.SerializerMethodField('sorted_players')
+    win_data = serializers.SerializerMethodField('get_win_data')
 
     def sorted_players(self, game):
         serialized_players = PlayerSerializer(game.players, many=True).data
@@ -30,6 +48,10 @@ class GameSerializer(serializers.ModelSerializer):
             return sorted(serialized_players,
                           key=lambda p: player_to_index[p['id']])
 
+    def get_win_data(self, game):
+        return WinDataSerializer(game).data
+
     class Meta:
         model = Game
-        exclude = ("field",)
+        exclude = ("field", "win_line_start_i", "win_line_start_j",
+                   "win_line_direction_i", "win_line_direction_j")
