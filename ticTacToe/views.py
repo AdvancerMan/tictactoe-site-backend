@@ -184,7 +184,8 @@ class MakeTurnView(APIView):
 
     def check_win_history(self, i, j, game):
         history_sorted = sorted(
-            game.history[game.history[-1]::len(game.order)],
+            game.history[(len(game.history) - 1) % len(game.order)
+                         ::len(game.order)],
             key=lambda p: abs(p[0] - i) + abs(p[1] - j)
         )
         captured = [[0] * 3 for _ in range(3)]
@@ -195,8 +196,8 @@ class MakeTurnView(APIView):
             max_abs = max(abs(delta_i), abs(delta_j))
             if (abs(delta_i) == abs(delta_j) or 0 in (delta_j, delta_i)) \
                     and max_abs != 0:
-                step_i = delta_i / max_abs
-                step_j = delta_j / max_abs
+                step_i = delta_i // max_abs
+                step_j = delta_j // max_abs
                 if captured[step_i + 1][step_j + 1] + 1 == max_abs:
                     captured[step_i + 1][step_j + 1] = max_abs
 
