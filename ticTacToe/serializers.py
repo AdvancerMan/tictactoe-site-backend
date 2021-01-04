@@ -18,8 +18,8 @@ class PlayerSerializer(serializers.ModelSerializer):
 
 
 class WinDataSerializer(serializers.ModelSerializer):
-    win_line_start = serializers.SerializerMethodField('get_win_line_start')
-    win_line_direction = serializers.SerializerMethodField(
+    start = serializers.SerializerMethodField('get_win_line_start')
+    direction = serializers.SerializerMethodField(
         'get_win_line_direction'
     )
 
@@ -31,7 +31,7 @@ class WinDataSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Game
-        fields = ['win_line_start', 'win_line_direction']
+        fields = ['start', 'direction']
 
 
 class GameSerializer(serializers.ModelSerializer):

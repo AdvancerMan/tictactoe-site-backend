@@ -44,8 +44,17 @@ class Game(models.Model):
     win_line_direction_j = models.IntegerField(default=None, null=True,
                                                blank=True)
 
+    @property
+    def str_status(self):
+        if self.finished:
+            return 'finished'
+        elif self.started:
+            return 'started'
+        else:
+            return 'waiting'
+
     def __str__(self):
-        return f"[{'started' if self.started else 'waiting'}] " \
+        return f"[{self.str_status}] " \
                f"{self.width}x{self.height}x{self.win_threshold} game with " \
                f"[{', '.join(str(u) for u in self.players.all())}]"
 

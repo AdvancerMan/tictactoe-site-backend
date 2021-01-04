@@ -1,5 +1,5 @@
 from abc import abstractmethod, ABC
-from random import shuffle
+import random
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -95,8 +95,7 @@ class CreateGameView(APIView):
 
         game = Game.objects.create(**data)
         game.players.add(request.user)
-        serializer = GameSerializer(game)
-        return Response(serializer.data)
+        return Response({"id": game.id})
 
 
 class JoinGameView(APIView):
@@ -132,7 +131,7 @@ class JoinGameView(APIView):
         game.players.add(request.user)
         game.colors[request.user.id] = data['color']
         game.save()
-        return Response(GameSerializer(game).data)
+        return Response()
 
 
 class StartGameView(APIView):
@@ -151,8 +150,8 @@ class StartGameView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
 
         game.order = list([player.id for player in game.players.all()])
-        shuffle(game.order)
-        game.colors = [game.colors[player_id] for player_id in game.order]
+        random.shuffle(game.order)
+        game.colors = [game.colors[str(player_id)] for player_id in game.order]
         game.started = True
         game.save()
 
