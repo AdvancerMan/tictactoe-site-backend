@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework import status
 
 from .forms import PageCountForm, GameForm, JoinForm, TurnForm, \
-    HistorySuffixForm
+    HistorySuffixForm, MyGamesForm
 from .models import Game
 from .serializers import (
     GameSerializer, GameListSerializer,
@@ -324,3 +324,21 @@ class GamePlayersView(APIView):
             'players': GamePlayersSerializer(game).data,
             'colors': GameColorsSerializer(game).data
         })
+
+
+class MyGamesView(APIView):
+    def get(self, request):
+        form = MyGamesForm(request.GET)
+        if not form.is_valid():
+            return Response({'errors': form.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        finished = form.cleaned_data.get('finished')
+        query_set = request.user.tic_tac_toe_games
+        if finished is None:
+            games = query_set.all()
+        elif finished:
+            games = Game.finished_query(query_set)
+        else:
+            games = Game.unfinished_query(query_set)
+        return Response(GameListSerializer(games, many=True).data)

@@ -47,3 +47,7 @@ class TurnForm(forms.Form):
 
 class HistorySuffixForm(forms.Form):
     start_index = forms.IntegerField(min_value=0, max_value=9999)
+
+
+class MyGamesForm(forms.Form):
+    finished = forms.NullBooleanField()

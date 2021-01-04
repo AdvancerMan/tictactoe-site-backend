@@ -61,3 +61,11 @@ class Game(models.Model):
     @property
     def finished(self):
         return self.win_line_start_i is not None
+
+    @staticmethod
+    def finished_query(query_set):
+        return query_set.filter(win_line_start_i__isnull=False)
+
+    @staticmethod
+    def unfinished_query(query_set):
+        return query_set.filter(win_line_start_i__isnull=True)
