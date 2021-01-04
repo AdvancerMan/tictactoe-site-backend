@@ -8,7 +8,11 @@ from rest_framework import status
 from .forms import PageCountForm, GameForm, JoinForm, TurnForm, \
     HistorySuffixForm
 from .models import Game
-from .serializers import GameSerializer, GameListSerializer, WinDataSerializer
+from .serializers import (
+    GameSerializer, GameListSerializer,
+    WinDataSerializer, GameColorsSerializer,
+    GamePlayersSerializer
+)
 
 
 class MyListView(APIView, ABC):
@@ -307,3 +311,16 @@ class HistorySuffixView(APIView):
         if game.win_line_start_i is not None:
             response['win_data'] = WinDataSerializer(game).data
         return Response(response)
+
+
+class GamePlayersView(APIView):
+    def get(self, request, pk):
+        game = Game.objects.filter(id=pk).first()
+        if not game:
+            return Response({'errors': {'pk': 'Game pk is invalid'}},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'players': GamePlayersSerializer(game).data,
+            'colors': GameColorsSerializer(game).data
+        })

@@ -34,11 +34,10 @@ class WinDataSerializer(serializers.ModelSerializer):
         fields = ['start', 'direction']
 
 
-class GameSerializer(serializers.ModelSerializer):
-    players = serializers.SerializerMethodField('sorted_players')
-    win_data = serializers.SerializerMethodField('get_win_data')
+class GamePlayersSerializer(serializers.ModelSerializer):
+    players = serializers.SerializerMethodField('get_players')
 
-    def sorted_players(self, game):
+    def get_players(self, game):
         serialized_players = PlayerSerializer(game.players, many=True).data
         if not game.started:
             return sorted(serialized_players, key=lambda p: p['id'])
@@ -47,6 +46,32 @@ class GameSerializer(serializers.ModelSerializer):
                                in zip(game.order, range(len(game.order)))}
             return sorted(serialized_players,
                           key=lambda p: player_to_index[p['id']])
+
+    class Meta:
+        model = Game
+        fields = ['players']
+
+
+class GameColorsSerializer(serializers.Serializer):
+    colors = serializers.SerializerMethodField('get_colors')
+
+    def get_colors(self, game):
+        if not game.started:
+            return [color for _, color in sorted(game.colors.items())]
+        else:
+            return game.colors
+
+
+class GameSerializer(serializers.ModelSerializer):
+    players = serializers.SerializerMethodField('get_players')
+    colors = serializers.SerializerMethodField('get_colors')
+    win_data = serializers.SerializerMethodField('get_win_data')
+
+    def get_players(self, game):
+        return GamePlayersSerializer(game).data
+
+    def get_colors(self, game):
+        return GameColorsSerializer(game).data
 
     def get_win_data(self, game):
         return WinDataSerializer(game).data
