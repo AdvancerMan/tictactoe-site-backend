@@ -303,4 +303,7 @@ class HistorySuffixView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
 
         start_index = form.cleaned_data['start_index']
-        return Response({'history': game.history[start_index:]})
+        response = {'history': game.history[start_index:]}
+        if game.win_line_start_i is not None:
+            response['win_data'] = WinDataSerializer(game).data
+        return Response(response)
