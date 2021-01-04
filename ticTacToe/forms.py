@@ -1,4 +1,7 @@
 from django import forms
+from django.core.exceptions import ValidationError
+
+from ticTacToe.models import Game
 
 
 class PageCountForm(forms.Form):
@@ -12,11 +15,25 @@ class PageCountForm(forms.Form):
         return int(self.data.get('count', 10))
 
 
-class GameForm(forms.Form):
-    width = forms.IntegerField(min_value=1, max_value=100)
-    height = forms.IntegerField(min_value=1, max_value=100)
-    win_threshold = forms.IntegerField(min_value=1, max_value=100)
+class GameForm(forms.ModelForm):
     owner_color = forms.RegexField(r'^#[0-9a-fA-F]{6}$')
+
+    def clean(self):
+        cleaned_data = super(GameForm, self).clean()
+        width = cleaned_data['width']
+        height = cleaned_data['height']
+        win_threshold = cleaned_data['win_threshold']
+
+        if win_threshold > width or win_threshold > height:
+            raise ValidationError(
+                "Win threshold should not be more than width and height"
+            )
+
+        return cleaned_data
+
+    class Meta:
+        model = Game
+        fields = ['width', 'height', 'win_threshold', 'owner_color']
 
 
 class JoinForm(forms.Form):

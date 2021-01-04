@@ -1,8 +1,8 @@
 from django.contrib.auth.models import User
-from django.core.validators import MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
-game_size_validator = MaxValueValidator(100)
+game_size_validators = [MinValueValidator(1), MaxValueValidator(100)]
 
 
 def get_admin():
@@ -10,10 +10,10 @@ def get_admin():
 
 
 class Game(models.Model):
-    width = models.PositiveIntegerField(validators=[game_size_validator])
-    height = models.PositiveIntegerField(validators=[game_size_validator])
+    width = models.PositiveIntegerField(validators=game_size_validators)
+    height = models.PositiveIntegerField(validators=game_size_validators)
     win_threshold = models.PositiveIntegerField(
-        validators=[game_size_validator]
+        validators=game_size_validators
     )
     owner = models.ForeignKey(User, on_delete=models.CASCADE, default=get_admin)
     players = models.ManyToManyField(User, related_name='tic_tac_toe_games')
@@ -36,9 +36,9 @@ class Game(models.Model):
     started = models.BooleanField(default=False)
 
     win_line_start_i = models.IntegerField(default=None, null=True, blank=True,
-                                           validators=[game_size_validator])
+                                           validators=game_size_validators)
     win_line_start_j = models.IntegerField(default=None, null=True, blank=True,
-                                           validators=[game_size_validator])
+                                           validators=game_size_validators)
     win_line_direction_i = models.IntegerField(default=None, null=True,
                                                blank=True)
     win_line_direction_j = models.IntegerField(default=None, null=True,
