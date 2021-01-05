@@ -321,8 +321,8 @@ class GamePlayersView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
 
         return Response({
-            'players': GamePlayersSerializer(game).data,
-            'colors': GameColorsSerializer(game).data
+            **GamePlayersSerializer(game.players).data,
+            **GameColorsSerializer(game).data
         })
 
 

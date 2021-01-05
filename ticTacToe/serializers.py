@@ -52,7 +52,7 @@ class GamePlayersSerializer(serializers.ModelSerializer):
         fields = ['players']
 
 
-class GameColorsSerializer(serializers.Serializer):
+class GameColorsSerializer(serializers.ModelSerializer):
     colors = serializers.SerializerMethodField('get_colors')
 
     def get_colors(self, game):
@@ -61,6 +61,10 @@ class GameColorsSerializer(serializers.Serializer):
         else:
             return game.colors
 
+    class Meta:
+        model = Game
+        fields = ['colors']
+
 
 class GameSerializer(serializers.ModelSerializer):
     players = serializers.SerializerMethodField('get_players')
@@ -68,10 +72,10 @@ class GameSerializer(serializers.ModelSerializer):
     win_data = serializers.SerializerMethodField('get_win_data')
 
     def get_players(self, game):
-        return GamePlayersSerializer(game).data
+        return GamePlayersSerializer(game).data['players']
 
     def get_colors(self, game):
-        return GameColorsSerializer(game).data
+        return GameColorsSerializer(game).data['colors']
 
     def get_win_data(self, game):
         return WinDataSerializer(game).data
