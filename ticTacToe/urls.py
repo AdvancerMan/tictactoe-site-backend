@@ -5,7 +5,7 @@ from ticTacToe.views import (
     WaitingGamesView, CreateGameView,
     JoinGameView, StartGameView,
     MakeTurnView, HistorySuffixView,
-    GamePlayersView, MyGamesView, GameStartedView
+    GamePlayersView, MyGamesView, GameStartedView, CircleCrossPictureView
 )
 
 urlpatterns = [
@@ -21,4 +21,5 @@ urlpatterns = [
     path('games/started', StartedGamesView.as_view(), name='started_games'),
     path('games/waiting', WaitingGamesView.as_view(), name='waiting_games'),
     path('games/create', CreateGameView.as_view(), name='create'),
+    path('pics/<name>/<rgb>/', CircleCrossPictureView.as_view(), name='pic'),
 ]

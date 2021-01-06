@@ -1,10 +1,21 @@
+import os
+import pickle
+import re
 from abc import abstractmethod, ABC
 import random
 
+import base64
+from io import BytesIO
+
+import numpy
+from PIL import Image, ImageDraw
+from django.http import HttpResponse, HttpResponseNotFound
+from django.views import View
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 
+from backend.settings import BASE_DIR
 from .forms import PageCountForm, GameForm, JoinForm, TurnForm, \
     HistorySuffixForm, MyGamesForm
 from .models import Game
@@ -352,3 +363,43 @@ class MyGamesView(APIView):
         else:
             games = Game.unfinished_query(query_set)
         return Response(GameListSerializer(games, many=True).data)
+
+
+def _get_image_pattern(name):
+    path = os.path.join(BASE_DIR, 'ticTacToe', 'picPatterns', name)
+    with open(path, 'rb') as f:
+        pattern = pickle.load(f)
+    for row in pattern:
+        for pix in row:
+            pix.insert(0, pix[0])
+            pix.insert(0, pix[0])
+    return numpy.array(pattern, numpy.uint8)
+
+
+class CircleCrossPictureView(View):
+    color_regex = re.compile('[0-9a-fA-F]{6}')
+    cross = _get_image_pattern('cross')
+    circle = _get_image_pattern('circle')
+
+    def get(self, request, name, rgb):
+        if name != 'cross' and name != 'circle':
+            return HttpResponseNotFound()
+        if not self.color_regex.match(rgb):
+            return HttpResponseNotFound()
+
+        r = int(rgb[:2], 16)
+        g = int(rgb[2:4], 16)
+        b = int(rgb[4:], 16)
+        if r > 255 or g > 255 or b > 255:
+            return HttpResponseNotFound()
+
+        pattern = self.cross if name == 'cross' else self.circle
+        pattern = pattern.copy()
+
+        result = numpy.multiply(pattern, (r / 255, g / 255, b / 255, 1))
+        result = numpy.round(result, 0).astype(numpy.uint8)
+        result = Image.fromarray(result)
+
+        buffered = BytesIO()
+        result.save(buffered, format="PNG")
+        return HttpResponse(buffered.getvalue(), content_type='image/png')
