@@ -4,17 +4,19 @@ from rest_framework import serializers
 from .models import Game
 
 
-class GameListSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Game
-        fields = ('id', 'width', 'height', 'win_threshold',
-                  'owner', 'creation_time')
-
-
 class PlayerSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'first_name', 'last_name')
+
+
+class GameListSerializer(serializers.ModelSerializer):
+    owner = PlayerSerializer()
+
+    class Meta:
+        model = Game
+        fields = ('id', 'width', 'height', 'win_threshold',
+                  'owner', 'creation_time', 'started', 'finished')
 
 
 class WinDataSerializer(serializers.ModelSerializer):
@@ -70,6 +72,7 @@ class GameSerializer(serializers.ModelSerializer):
     players = serializers.SerializerMethodField('get_players')
     colors = serializers.SerializerMethodField('get_colors')
     win_data = serializers.SerializerMethodField('get_win_data')
+    finished = serializers.BooleanField()
 
     def get_players(self, game):
         return GamePlayersSerializer(game).data['players']

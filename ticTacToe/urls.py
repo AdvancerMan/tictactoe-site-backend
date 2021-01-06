@@ -5,12 +5,13 @@ from ticTacToe.views import (
     WaitingGamesView, CreateGameView,
     JoinGameView, StartGameView,
     MakeTurnView, HistorySuffixView,
-    GamePlayersView, MyGamesView
+    GamePlayersView, MyGamesView, GameStartedView
 )
 
 urlpatterns = [
     path('game/<int:pk>', GameDetailView.as_view(), name='game'),
     path('game/<int:pk>/players', GamePlayersView.as_view(), name='players'),
+    path('game/<int:pk>/started', GameStartedView.as_view(), name='started'),
     path('game/<int:pk>/join', JoinGameView.as_view(), name='join'),
     path('game/<int:pk>/start', StartGameView.as_view(), name='start'),
     path('game/<int:pk>/turn', MakeTurnView.as_view(), name='start'),
