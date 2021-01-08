@@ -20,9 +20,9 @@ class GameForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super(GameForm, self).clean()
-        width = cleaned_data['width']
-        height = cleaned_data['height']
-        win_threshold = cleaned_data['win_threshold']
+        width = cleaned_data.get('width', 0)
+        height = cleaned_data.get('height', 0)
+        win_threshold = cleaned_data.get('win_threshold', 0)
 
         if win_threshold > width or win_threshold > height:
             raise ValidationError(

@@ -4,11 +4,10 @@ import re
 from abc import abstractmethod, ABC
 import random
 
-import base64
 from io import BytesIO
 
 import numpy
-from PIL import Image, ImageDraw
+from PIL import Image
 from django.http import HttpResponse, HttpResponseNotFound
 from django.views import View
 from rest_framework.response import Response
