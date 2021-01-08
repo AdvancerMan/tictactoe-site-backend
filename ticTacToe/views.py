@@ -54,7 +54,7 @@ class StartedGamesView(MyListView):
     permission_classes = []
 
     def get_query_set(self):
-        return Game.objects.filter(started=True)
+        return Game.objects.filter(started=True).order_by('-creation_time')
 
     def get_serializer_class(self):
         return GameListSerializer
@@ -82,7 +82,7 @@ class WaitingGamesView(MyListView):
     permission_classes = []
 
     def get_query_set(self):
-        return Game.objects.filter(started=False)
+        return Game.objects.filter(started=False).order_by('-creation_time')
 
     def get_serializer_class(self):
         return GameListSerializer
@@ -362,6 +362,7 @@ class MyGamesView(APIView):
             games = Game.finished_query(query_set)
         else:
             games = Game.unfinished_query(query_set)
+        games = games.order_by('-creation_time')
         return Response(GameListSerializer(games, many=True).data)
 
 
