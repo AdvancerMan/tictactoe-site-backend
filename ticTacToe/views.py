@@ -3,6 +3,7 @@ import pickle
 import re
 from abc import abstractmethod, ABC
 import random
+from functools import lru_cache
 
 from io import BytesIO
 
@@ -378,8 +379,21 @@ def _get_image_pattern(name):
 
 class CircleCrossPictureView(View):
     color_regex = re.compile('[0-9a-fA-F]{6}')
-    cross = _get_image_pattern('cross')
-    circle = _get_image_pattern('circle')
+    patterns = {
+        name: _get_image_pattern(name) for name in ['cross', 'circle']
+    }
+
+    @lru_cache
+    def generate_image_bytes(self, r, g, b, name):
+        pattern = self.patterns[name].copy()
+
+        pix_array = numpy.multiply(pattern, (r / 255, g / 255, b / 255, 1))
+        pix_array = numpy.round(pix_array, 0).astype(numpy.uint8)
+        result = Image.fromarray(pix_array)
+
+        buffered = BytesIO()
+        result.save(buffered, format="PNG")
+        return buffered.getvalue()
 
     def get(self, request, name, rgb):
         if name != 'cross' and name != 'circle':
@@ -393,13 +407,5 @@ class CircleCrossPictureView(View):
         if r > 255 or g > 255 or b > 255:
             return HttpResponseNotFound()
 
-        pattern = self.cross if name == 'cross' else self.circle
-        pattern = pattern.copy()
-
-        result = numpy.multiply(pattern, (r / 255, g / 255, b / 255, 1))
-        result = numpy.round(result, 0).astype(numpy.uint8)
-        result = Image.fromarray(result)
-
-        buffered = BytesIO()
-        result.save(buffered, format="PNG")
-        return HttpResponse(buffered.getvalue(), content_type='image/png')
+        result = self.generate_image_bytes(r, g, b, name)
+        return HttpResponse(result, content_type='image/png')
