@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
 
 from .models import Game
 
@@ -87,3 +88,48 @@ class GameSerializer(serializers.ModelSerializer):
         model = Game
         exclude = ("field", "win_line_start_i", "win_line_start_j",
                    "win_line_direction_i", "win_line_direction_j")
+
+
+class CreateGameSerializer(serializers.ModelSerializer):
+    owner_color = serializers.RegexField(r'^#[0-9a-fA-F]{6}$')
+
+    def validate(self, data):
+        width = data.get('width', 0)
+        height = data.get('height', 0)
+        win_threshold = data.get('win_threshold', 0)
+
+        if win_threshold > width or win_threshold > height:
+            raise ValidationError(
+                "Win threshold should not be more than width and height"
+            )
+
+        return data
+
+    def create(self, validated_data):
+        owner = validated_data['owner']
+        colors = {owner.id: validated_data['owner_color']}
+        data_copy = {k: v for k, v in validated_data.items()
+                     if k != 'owner_color'}
+        game = Game.objects.create(**data_copy, colors=colors)
+        game.players.add(owner)
+        return game
+
+    class Meta:
+        model = Game
+        fields = ['width', 'height', 'win_threshold', 'owner_color']
+
+
+class JoinSerializer(serializers.Serializer):
+    color = serializers.RegexField(r'^#[0-9a-fA-F]{6}$')
+
+    def validate_color(self, color):
+        if color in self.instance.colors.values():
+            raise serializers.ValidationError('Color is already in use')
+        return color
+
+    def update(self, game, validated_data):
+        user = validated_data['user']
+        game.players.add(user)
+        game.colors[user.id] = validated_data['color']
+        game.save()
+        return game

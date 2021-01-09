@@ -11,18 +11,19 @@ import numpy
 from PIL import Image
 from django.http import HttpResponse, HttpResponseNotFound
 from django.views import View
+from rest_framework import serializers, exceptions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 
 from backend.settings import BASE_DIR
-from .forms import PageCountForm, GameForm, JoinForm, TurnForm, \
+from .forms import PageCountForm, TurnForm, \
     HistorySuffixForm, MyGamesForm
 from .models import Game
 from .serializers import (
     GameSerializer, GameListSerializer,
     WinDataSerializer, GameColorsSerializer,
-    GamePlayersSerializer
+    GamePlayersSerializer, CreateGameSerializer, JoinSerializer
 )
 
 
@@ -63,12 +64,6 @@ class StartedGamesView(MyListView):
 class GameDetailView(APIView):
     permission_classes = []
 
-    def head(self, request, pk):
-        game = Game.objects.filter(id=pk)
-        if not game:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        return Response()
-
     def get(self, request, pk):
         game = Game.objects.filter(id=pk)
         if not game:
@@ -91,61 +86,35 @@ class WaitingGamesView(MyListView):
 class CreateGameView(APIView):
     def post(self, request):
         if request.user.tic_tac_toe_games.filter(started=False):
-            return Response({'errors': {
-                'user': 'You can not create a game while you are in other game'
-            }}, status=status.HTTP_400_BAD_REQUEST)
+            raise serializers.ValidationError({
+                '__all__': 'You can not create a game'
+                           ' while you are in other game'
+            })
 
-        form = GameForm(request.data)
-        if not form.is_valid():
-            return Response({'errors': form.errors},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        # it is not a copy of form.cleaned_data
-        data = form.cleaned_data
-        data['colors'] = {
-            request.user.id: data['owner_color']
-        }
-        del data['owner_color']
-        data['owner'] = request.user
-
-        game = Game.objects.create(**data)
-        game.players.add(request.user)
-        return Response({"id": game.id})
+        serializer = CreateGameSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        game = serializer.save(owner=request.user)
+        return Response({'id': game.id})
 
 
 class JoinGameView(APIView):
     def patch(self, request, pk):
         if request.user.tic_tac_toe_games.filter(started=False):
-            return Response({'errors': {
-                'user': 'You can not join a game while you are in other game'
-            }}, status=status.HTTP_400_BAD_REQUEST)
+            raise serializers.ValidationError({
+                '__all__': 'You can not join a game while you are in other game'
+            })
 
         game = Game.objects.filter(id=pk).first()
-        if not game:
-            return Response({'errors': {'pk': 'Game pk is invalid'}},
-                            status=status.HTTP_400_BAD_REQUEST)
-
+        if game is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
         if game.started:
-            return Response({'errors': {
-                'game': 'This game has already started'
-            }}, status=status.HTTP_400_BAD_REQUEST)
+            raise serializers.ValidationError({
+                'game': 'The game has already started'
+            })
 
-        # TODO validate number of players < available and lock a mutex
-
-        form = JoinForm(request.data)
-        if not form.is_valid():
-            return Response({'errors': form.errors},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        data = form.cleaned_data
-
-        if data['color'] in game.colors.values():
-            return Response({'errors': {'color': 'Color is already in use'}},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        game.players.add(request.user)
-        game.colors[request.user.id] = data['color']
-        game.save()
+        serializer = JoinSerializer(game, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user=request.user)
         return Response()
 
 
@@ -153,16 +122,15 @@ class StartGameView(APIView):
     def patch(self, request, pk):
         game = Game.objects.filter(id=pk).first()
         if not game:
-            return Response({'errors': {'pk': 'Game pk is invalid'}},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
         if game.owner_id != request.user.id:
-            return Response({'errors': {'user': 'You are not the owner'}},
-                            status=status.HTTP_403_FORBIDDEN)
+            raise exceptions.PermissionDenied({'user': 'You are not the owner'})
 
         if game.started:
-            return Response({'errors': {'game': 'Game has already started'}},
-                            status=status.HTTP_400_BAD_REQUEST)
+            raise serializers.ValidationError({
+                'game': 'Game has already started'
+            })
 
         game.order = list([player.id for player in game.players.all()])
         random.shuffle(game.order)
@@ -305,6 +273,8 @@ class MakeTurnView(APIView):
 
 
 class HistorySuffixView(APIView):
+    permission_classes = []
+
     def get(self, request, pk):
         game = Game.objects.filter(id=pk).first()
         # TODO move all validation to form
@@ -325,6 +295,8 @@ class HistorySuffixView(APIView):
 
 
 class GamePlayersView(APIView):
+    permission_classes = []
+
     def get(self, request, pk):
         game = Game.objects.filter(id=pk).first()
         if not game:
@@ -338,6 +310,8 @@ class GamePlayersView(APIView):
 
 
 class GameStartedView(APIView):
+    permission_classes = []
+
     def get(self, request, pk):
         game = Game.objects.filter(id=pk).first()
         if not game:
