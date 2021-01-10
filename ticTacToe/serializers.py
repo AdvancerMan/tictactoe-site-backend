@@ -14,10 +14,11 @@ class PlayerSerializer(serializers.ModelSerializer):
 
 class GameListSerializer(serializers.ModelSerializer):
     owner = PlayerSerializer()
+    winner = PlayerSerializer()
 
     class Meta:
         model = Game
-        fields = ('id', 'width', 'height', 'win_threshold',
+        fields = ('id', 'width', 'height', 'win_threshold', 'winner',
                   'owner', 'creation_time', 'started', 'finished')
 
 

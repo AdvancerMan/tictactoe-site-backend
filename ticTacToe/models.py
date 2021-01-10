@@ -58,6 +58,23 @@ class Game(models.Model):
     def finished(self):
         return self.win_line_start_i is not None
 
+    @property
+    def winner(self):
+        if not self.finished:
+            return None
+
+        win = [self.win_line_start_i, self.win_line_start_j]
+        uid = None
+        if self.field is not None:
+            uid = self.field[win[0]][win[1]]
+        else:
+            for pos, i in zip(self.history, range(len(self.history))):
+                if pos[0] == win[0] and pos[1] == win[1]:
+                    uid = self.order[i % len(self.order)]
+                    break
+        if uid is not None:
+            return self.players.filter(id=uid).first()
+
     @staticmethod
     def finished_query(query_set):
         return query_set.filter(win_line_start_i__isnull=False)

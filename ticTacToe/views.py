@@ -27,6 +27,9 @@ class MyListView(APIView, ABC):
     def get_serializer_class(self):
         return None
 
+    def inject_data(self, objects, serialized, request):
+        return serialized
+
     def get(self, request, *args, **kwargs):
         form = PageCountForm(request.GET)
         if not form.is_valid():
@@ -39,17 +42,28 @@ class MyListView(APIView, ABC):
         objects = self.get_query_set(request, *args, **kwargs)
         page_objects = objects[(page - 1) * count:page * count]
         serializer = self.get_serializer_class()(page_objects, many=True)
-        return Response(serializer.data)
+        serialized = serializer.data
+        serialized = self.inject_data(
+            page_objects, serialized, request, *args, **kwargs
+        )
+        return Response(serialized)
 
 
-class StartedGamesView(MyListView):
+class AbstractGameListView(MyListView, ABC):
+    def get_serializer_class(self):
+        return GameListSerializer
+
+    def inject_data(self, games, serialized, request, *args, **kwargs):
+        for game, serialized_game in zip(games, serialized):
+            serialized_game['user_joined'] = request.user in game.players.all()
+        return serialized
+
+
+class StartedGamesView(AbstractGameListView):
     permission_classes = []
 
     def get_query_set(self, request):
         return Game.objects.filter(started=True).order_by('-creation_time')
-
-    def get_serializer_class(self):
-        return GameListSerializer
 
 
 class GameDetailView(APIView):
@@ -67,14 +81,11 @@ class GameDetailView(APIView):
         return Response(serializer.data)
 
 
-class WaitingGamesView(MyListView):
+class WaitingGamesView(AbstractGameListView):
     permission_classes = []
 
     def get_query_set(self, request):
         return Game.objects.filter(started=False).order_by('-creation_time')
-
-    def get_serializer_class(self):
-        return GameListSerializer
 
 
 class CreateGameView(APIView):
@@ -229,7 +240,7 @@ class GameStartedView(APIView):
         return Response({'started': game.started})
 
 
-class MyGamesView(MyListView):
+class MyGamesView(AbstractGameListView):
     def get_query_set(self, request):
         form = MyGamesForm(request.GET)
         if not form.is_valid():
@@ -245,9 +256,6 @@ class MyGamesView(MyListView):
             query_set = Game.unfinished_query(query_set)
         query_set = query_set.order_by('-creation_time')
         return query_set
-
-    def get_serializer_class(self):
-        return GameListSerializer
 
 
 class CircleCrossPictureView(View):
