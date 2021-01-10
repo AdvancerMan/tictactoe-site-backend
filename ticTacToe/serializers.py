@@ -3,6 +3,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from .models import Game
+from . import service
 
 
 class PlayerSerializer(serializers.ModelSerializer):
@@ -131,5 +132,53 @@ class JoinSerializer(serializers.Serializer):
         user = validated_data['user']
         game.players.add(user)
         game.colors[user.id] = validated_data['color']
+        game.save()
+        return game
+
+
+class TurnSerializer(serializers.Serializer):
+    i = serializers.IntegerField(min_value=0, max_value=99)
+    j = serializers.IntegerField(min_value=0, max_value=99)
+
+    def validate_i(self, i):
+        if i >= self.instance.height:
+            raise serializers.ValidationError(
+                f'Should be less than {self.instance.height}'
+            )
+        return i
+
+    def validate_j(self, j):
+        if j >= self.instance.width:
+            raise serializers.ValidationError(
+                f'Should be less than {self.instance.width}'
+            )
+        return j
+
+    def validate(self, data):
+        i, j = data['i'], data['j']
+        game = self.instance
+        if (game.field is not None and game.field[i][j] != -1
+                or game.field is None and [i, j] in game.history):
+            raise serializers.ValidationError(
+                f'Cell ({i}, {j}) is already busy'
+            )
+        return data
+
+    def update(self, game, validated_data):
+        i, j = validated_data['i'], validated_data['j']
+        game.history.append([i, j])
+        if game.field:
+            game.field[i][j] = len(game.history) % len(game.order)
+
+        if win_data := service.check_win(i, j, game):
+            game.win_line_start_i = win_data['start_i']
+            game.win_line_start_j = win_data['start_j']
+            game.win_line_direction_i = win_data['direction_i']
+            game.win_line_direction_j = win_data['direction_j']
+            game.field = None
+        elif len(game.history) == game.width * game.height:
+            game.win_line_start_i = -1
+            game.win_line_start_j = -1
+            game.field = None
         game.save()
         return game

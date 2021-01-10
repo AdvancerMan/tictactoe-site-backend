@@ -1,60 +1,51 @@
-import os
-import pickle
 import re
 from abc import abstractmethod, ABC
 import random
-from functools import lru_cache
 
-from io import BytesIO
-
-import numpy
-from PIL import Image
 from django.http import HttpResponse, HttpResponseNotFound
 from django.views import View
 from rest_framework import serializers, exceptions
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import status
 
-from backend.settings import BASE_DIR
-from .forms import PageCountForm, TurnForm, \
-    HistorySuffixForm, MyGamesForm
+from . import service
+from .forms import PageCountForm, HistorySuffixForm, MyGamesForm
 from .models import Game
 from .serializers import (
     GameSerializer, GameListSerializer,
     WinDataSerializer, GameColorsSerializer,
-    GamePlayersSerializer, CreateGameSerializer, JoinSerializer
+    GamePlayersSerializer, CreateGameSerializer, JoinSerializer, TurnSerializer
 )
 
 
 class MyListView(APIView, ABC):
     @abstractmethod
-    def get_query_set(self):
+    def get_query_set(self, request):
         return None
 
     @abstractmethod
     def get_serializer_class(self):
         return None
 
-    def get(self, request):
+    def get(self, request, *args, **kwargs):
         form = PageCountForm(request.GET)
         if not form.is_valid():
-            return Response({'errors': form.errors},
-                            status=status.HTTP_400_BAD_REQUEST)
+            raise serializers.ValidationError(form.errors)
 
         data = form.cleaned_data
         page = data['page']
         count = data['count']
 
-        objects = self.get_query_set()[(page - 1) * count:page * count]
-        serializer = self.get_serializer_class()(objects, many=True)
+        objects = self.get_query_set(request, *args, **kwargs)
+        page_objects = objects[(page - 1) * count:page * count]
+        serializer = self.get_serializer_class()(page_objects, many=True)
         return Response(serializer.data)
 
 
 class StartedGamesView(MyListView):
     permission_classes = []
 
-    def get_query_set(self):
+    def get_query_set(self, request):
         return Game.objects.filter(started=True).order_by('-creation_time')
 
     def get_serializer_class(self):
@@ -64,19 +55,22 @@ class StartedGamesView(MyListView):
 class GameDetailView(APIView):
     permission_classes = []
 
-    def get(self, request, pk):
-        game = Game.objects.filter(id=pk)
+    def validate(self, pk):
+        game = Game.objects.filter(id=pk).first()
         if not game:
-            return Response({'errors': {'pk': 'Game pk is invalid'}},
-                            status=status.HTTP_404_NOT_FOUND)
-        serializer = GameSerializer(game.first())
+            raise exceptions.NotFound()
+        return game
+
+    def get(self, request, pk):
+        game = self.validate(pk)
+        serializer = GameSerializer(game)
         return Response(serializer.data)
 
 
 class WaitingGamesView(MyListView):
     permission_classes = []
 
-    def get_query_set(self):
+    def get_query_set(self, request):
         return Game.objects.filter(started=False).order_by('-creation_time')
 
     def get_serializer_class(self):
@@ -84,13 +78,15 @@ class WaitingGamesView(MyListView):
 
 
 class CreateGameView(APIView):
-    def post(self, request):
+    def validate(self, request):
         if request.user.tic_tac_toe_games.filter(started=False):
             raise serializers.ValidationError({
                 '__all__': 'You can not create a game'
                            ' while you are in other game'
             })
 
+    def post(self, request):
+        self.validate(request)
         serializer = CreateGameSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         game = serializer.save(owner=request.user)
@@ -98,7 +94,7 @@ class CreateGameView(APIView):
 
 
 class JoinGameView(APIView):
-    def patch(self, request, pk):
+    def validate(self, request, pk):
         if request.user.tic_tac_toe_games.filter(started=False):
             raise serializers.ValidationError({
                 '__all__': 'You can not join a game while you are in other game'
@@ -106,12 +102,15 @@ class JoinGameView(APIView):
 
         game = Game.objects.filter(id=pk).first()
         if game is None:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+            raise exceptions.NotFound()
         if game.started:
             raise serializers.ValidationError({
                 'game': 'The game has already started'
             })
+        return game
 
+    def patch(self, request, pk):
+        game = self.validate(request, pk)
         serializer = JoinSerializer(game, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(user=request.user)
@@ -119,10 +118,10 @@ class JoinGameView(APIView):
 
 
 class StartGameView(APIView):
-    def patch(self, request, pk):
+    def valdidate(self, request, pk):
         game = Game.objects.filter(id=pk).first()
-        if not game:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        if game is None:
+            raise exceptions.NotFound()
 
         if game.owner_id != request.user.id:
             raise exceptions.PermissionDenied({'user': 'You are not the owner'})
@@ -131,7 +130,10 @@ class StartGameView(APIView):
             raise serializers.ValidationError({
                 'game': 'Game has already started'
             })
+        return game
 
+    def patch(self, request, pk):
+        game = self.valdidate(request, pk)
         game.order = list([player.id for player in game.players.all()])
         random.shuffle(game.order)
         game.colors = [game.colors[str(player_id)] for player_id in game.order]
@@ -142,150 +144,52 @@ class StartGameView(APIView):
 
 
 class MakeTurnView(APIView):
-    def check_captured(self, i, j, game, captured):
-        for step_i in range(-1, 2):
-            for step_j in range(-1, 2):
-                if (captured[step_i + 1][step_j + 1]
-                        + captured[-step_i + 1][-step_j + 1] + 1
-                        >= game.win_threshold):
-                    start_i = i + step_i * captured[step_i + 1][step_j + 1]
-                    start_j = j + step_j * captured[step_i + 1][step_j + 1]
-                    return {
-                        'start_i': start_i,
-                        'start_j': start_j,
-                        'direction_i': -step_i,
-                        'direction_j': -step_j,
-                    }
-
-    def check_win_field(self, i, j, game):
-        captured = [[0] * 3 for _ in range(3)]
-        for step_i in range(-1, 2):
-            for step_j in range(-1, 2):
-                if step_i == 0 and step_j == 0:
-                    continue
-                for distance in range(1, game.win_threshold):
-                    check_i = i + step_i * distance
-                    check_j = j + step_j * distance
-                    if (check_i < 0 or check_i >= game.height
-                            or check_j < 0 or check_j >= game.width):
-                        break
-                    if game.field[check_i][check_j] == game.field[i][j]:
-                        captured[step_i + 1][step_j + 1] = distance
-                    else:
-                        break
-
-        return self.check_captured(i, j, game, captured)
-
-    def check_win_history(self, i, j, game):
-        history_sorted = sorted(
-            game.history[(len(game.history) - 1) % len(game.order)
-                         ::len(game.order)],
-            key=lambda p: abs(p[0] - i) + abs(p[1] - j)
-        )
-        captured = [[0] * 3 for _ in range(3)]
-
-        for turn in history_sorted:
-            delta_i = turn[0] - i
-            delta_j = turn[1] - j
-            max_abs = max(abs(delta_i), abs(delta_j))
-            if (abs(delta_i) == abs(delta_j) or 0 in (delta_j, delta_i)) \
-                    and max_abs != 0:
-                step_i = delta_i // max_abs
-                step_j = delta_j // max_abs
-                if captured[step_i + 1][step_j + 1] + 1 == max_abs:
-                    captured[step_i + 1][step_j + 1] = max_abs
-
-        return self.check_captured(i, j, game, captured)
-
-    def init_field(self, game):
-        game.field = [[-1] * game.width for _ in range(game.height)]
-        for i in range(len(game.history)):
-            turn = game.history[i]
-            game.field[turn[0]][turn[1]] = i % len(game.order)
-
-    def check_win(self, i, j, game):
-        if game.field is None \
-                and len(game.history) > 2 * min(game.width, game.height):
-            self.init_field(game)
-
-        if game.field is not None:
-            return self.check_win_field(i, j, game)
-        else:
-            return self.check_win_history(i, j, game)
-
-    def patch(self, request, pk):
+    def validate(self, request, pk):
         game = Game.objects.filter(id=pk).first()
-        # TODO move all validation to form
-        if not game:
-            return Response({'errors': {'pk': 'Game pk is invalid'}},
-                            status=status.HTTP_400_BAD_REQUEST)
+        if game is None:
+            raise exceptions.NotFound()
+
+        if not game.started:
+            raise serializers.ValidationError({
+                'game': 'Game has not started yet'
+            })
 
         if game.finished:
-            return Response({'errors': {'game': 'Game has already finished'}},
-                            status=status.HTTP_400_BAD_REQUEST)
+            raise serializers.ValidationError({
+                'game': 'Game has already finished'
+            })
 
-        form = TurnForm(request.data)
-        if not form.is_valid():
-            return Response({'errors': form.errors},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        turn_user_index = len(game.history) % game.players.count()
+        turn_user_index = len(game.history) % len(game.order)
         turn_user_id = game.order[turn_user_index]
         if turn_user_id != request.user.id:
-            return Response({'errors': {'user': 'It is not your turn'}},
-                            status=status.HTTP_403_FORBIDDEN)
+            raise exceptions.PermissionDenied({
+                'user': 'It is not your turn'
+            })
+        return game
 
-        i = form.cleaned_data['i']
-        j = form.cleaned_data['j']
-        if i < 0 or i >= game.height:
-            return Response({'errors': {
-                'i': f'Not in range (0, {game.height})'
-            }}, status=status.HTTP_400_BAD_REQUEST)
-
-        if j < 0 or j >= game.width:
-            return Response({'errors': {
-                'j': f'Not in range (0, {game.width})'
-            }}, status=status.HTTP_400_BAD_REQUEST)
-
-        if (game.field is not None and game.field[i][j] != -1
-                or game.field is None and [i, j] in game.history):
-            return Response({'errors': {
-                ind: f'Cell ({i}, {j}) is already busy'
-                for ind in ('i', 'j')
-            }}, status=status.HTTP_400_BAD_REQUEST)
-
-        game.history.append([i, j])
-        if game.field:
-            game.field[i][j] = turn_user_index
-        if win_data := self.check_win(i, j, game):
-            game.win_line_start_i = win_data['start_i']
-            game.win_line_start_j = win_data['start_j']
-            game.win_line_direction_i = win_data['direction_i']
-            game.win_line_direction_j = win_data['direction_j']
-            game.field = None
-        elif len(game.history) == game.width * game.height:
-            game.win_line_start_i = -1
-            game.win_line_start_j = -1
-            game.field = None
-
-        game.save()
+    def patch(self, request, pk):
+        game = self.validate(request, pk)
+        serializer = TurnSerializer(game, request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
         return Response(WinDataSerializer(game).data)
 
 
 class HistorySuffixView(APIView):
     permission_classes = []
 
-    def get(self, request, pk):
+    def validate(self, pk):
         game = Game.objects.filter(id=pk).first()
-        # TODO move all validation to form
-        if not game:
-            return Response({'errors': {'pk': 'Game pk is invalid'}},
-                            status=status.HTTP_400_BAD_REQUEST)
+        if game is None:
+            raise exceptions.NotFound()
+        return game
+
+    def get(self, request, pk):
+        game = self.validate(pk)
 
         form = HistorySuffixForm(request.GET)
         if not form.is_valid():
-            return Response({'errors': form.errors},
-                            status=status.HTTP_400_BAD_REQUEST)
+            raise serializers.ValidationError(form.errors)
 
         start_index = form.cleaned_data['start_index']
         response = {'history': game.history[start_index:]}
@@ -297,12 +201,14 @@ class HistorySuffixView(APIView):
 class GamePlayersView(APIView):
     permission_classes = []
 
-    def get(self, request, pk):
+    def validate(self, pk):
         game = Game.objects.filter(id=pk).first()
-        if not game:
-            return Response({'errors': {'pk': 'Game pk is invalid'}},
-                            status=status.HTTP_400_BAD_REQUEST)
+        if game is None:
+            raise exceptions.NotFound()
+        return game
 
+    def get(self, request, pk):
+        game = self.validate(pk)
         return Response({
             **GamePlayersSerializer(game).data,
             **GameColorsSerializer(game).data
@@ -312,62 +218,40 @@ class GamePlayersView(APIView):
 class GameStartedView(APIView):
     permission_classes = []
 
-    def get(self, request, pk):
+    def validate(self, pk):
         game = Game.objects.filter(id=pk).first()
-        if not game:
-            return Response({'errors': {'pk': 'Game pk is invalid'}},
-                            status=status.HTTP_400_BAD_REQUEST)
+        if game is None:
+            raise exceptions.NotFound()
+        return game
 
+    def get(self, request, pk):
+        game = self.validate(pk)
         return Response({'started': game.started})
 
 
-class MyGamesView(APIView):
-    def get(self, request):
+class MyGamesView(MyListView):
+    def get_query_set(self, request):
         form = MyGamesForm(request.GET)
         if not form.is_valid():
-            return Response({'errors': form.errors},
-                            status=status.HTTP_400_BAD_REQUEST)
+            raise serializers.ValidationError(form.errors)
 
         finished = form.cleaned_data.get('finished')
         query_set = request.user.tic_tac_toe_games
         if finished is None:
-            games = query_set.all()
+            query_set = query_set.all()
         elif finished:
-            games = Game.finished_query(query_set)
+            query_set = Game.finished_query(query_set)
         else:
-            games = Game.unfinished_query(query_set)
-        games = games.order_by('-creation_time')
-        return Response(GameListSerializer(games, many=True).data)
+            query_set = Game.unfinished_query(query_set)
+        query_set = query_set.order_by('-creation_time')
+        return query_set
 
-
-def _get_image_pattern(name):
-    path = os.path.join(BASE_DIR, 'ticTacToe', 'picPatterns', name)
-    with open(path, 'rb') as f:
-        pattern = pickle.load(f)
-    for row in pattern:
-        for pix in row:
-            pix.insert(0, pix[0])
-            pix.insert(0, pix[0])
-    return numpy.array(pattern, numpy.uint8)
+    def get_serializer_class(self):
+        return GameListSerializer
 
 
 class CircleCrossPictureView(View):
     color_regex = re.compile('[0-9a-fA-F]{6}')
-    patterns = {
-        name: _get_image_pattern(name) for name in ['cross', 'circle']
-    }
-
-    @lru_cache
-    def generate_image_bytes(self, r, g, b, name):
-        pattern = self.patterns[name].copy()
-
-        pix_array = numpy.multiply(pattern, (r / 255, g / 255, b / 255, 1))
-        pix_array = numpy.round(pix_array, 0).astype(numpy.uint8)
-        result = Image.fromarray(pix_array)
-
-        buffered = BytesIO()
-        result.save(buffered, format="PNG")
-        return buffered.getvalue()
 
     def get(self, request, name, rgb):
         if name != 'cross' and name != 'circle':
@@ -381,5 +265,5 @@ class CircleCrossPictureView(View):
         if r > 255 or g > 255 or b > 255:
             return HttpResponseNotFound()
 
-        result = self.generate_image_bytes(r, g, b, name)
+        result = service.generate_image_bytes(r, g, b, name)
         return HttpResponse(result, content_type='image/png')
