@@ -90,7 +90,7 @@ class WaitingGamesView(AbstractGameListView):
 
 class CreateGameView(APIView):
     def validate(self, request):
-        if request.user.tic_tac_toe_games.filter(started=False):
+        if Game.unfinished_query(request.user.tic_tac_toe_games):
             raise serializers.ValidationError({
                 '__all__': 'You can not create a game'
                            ' while you are in other game'
@@ -106,7 +106,7 @@ class CreateGameView(APIView):
 
 class JoinGameView(APIView):
     def validate(self, request, pk):
-        if request.user.tic_tac_toe_games.filter(started=False):
+        if Game.unfinished_query(request.user.tic_tac_toe_games):
             raise serializers.ValidationError({
                 '__all__': 'You can not join a game while you are in other game'
             })

@@ -167,9 +167,9 @@ class TurnSerializer(serializers.Serializer):
 
     def update(self, game, validated_data):
         i, j = validated_data['i'], validated_data['j']
-        game.history.append([i, j])
         if game.field:
             game.field[i][j] = len(game.history) % len(game.order)
+        game.history.append([i, j])
 
         if win_data := service.check_win(i, j, game):
             game.win_line_start_i = win_data['start_i']
